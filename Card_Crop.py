@@ -2,6 +2,7 @@ import sys
 import cv2
 import imutils
 import numpy as np
+from matplotlib import pyplot as plt
 
 def calcParams(p1, p2):
     # Calculate line parameters a, b, c for the line equation ax + by + c = 0
@@ -32,18 +33,27 @@ def FindIntersect(params1, params2):
 def getQuad(grayscale, output):
     # Get the four corners of the card using contours and Hough line transform
     convex_hull_mask = np.zeros_like(grayscale)
-    
+
     contours, _ = cv2.findContours(grayscale, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
     contours = sorted(contours, key=lambda c: cv2.contourArea(c), reverse=True)
 
     hull = [cv2.convexHull(contours[0])]
-    cv2.drawContours(convex_hull_mask, hull, -1, 255, 1)
+    cv2.drawContours(convex_hull_mask, hull, 0, 255, 1)
     cv2.imshow("Hull Mask", convex_hull_mask)
     cv2.waitKey(0)
     cv2.destroyAllWindows()
 
-    lines = cv2.HoughLinesP(convex_hull_mask, 1, np.pi / 200, 50, minLineLength=60, maxLineGap=2)
+    lines = cv2.HoughLinesP(convex_hull_mask, 4, np.pi / 150, 1, minLineLength=50, maxLineGap=2)
     sys.stdout.write("Lines: %s" % len(lines))
+
+    """
+    [plt.plot([line[0][0],line[0][2]],[line[0][1],line[0][3]] , color="green", linewidth = 3) for line in lines]
+    plt.imshow(image)
+    plt.show()
+    cv2.waitKey(0)
+    cv2.destroyAllWindows()
+    """
+
 
     if lines is not None and len(lines) == 4:
         params = [calcParams((line[0][0], line[0][1]), (line[0][2], line[0][3])) for line in lines]
@@ -66,18 +76,39 @@ def getQuad(grayscale, output):
 
 def orderPoints(pts):
     # Rotate Image
-    return [pts[3], pts[2], pts[1], pts[0]]
+    # Convert points to a numpy array
+    pts = np.array(pts)
+    
+    # Calculate the sum of the coordinates (x + y)
+    s = pts.sum(axis=1)
+    
+    # Calculate the difference of the coordinates (y - x)
+    diff = np.diff(pts, axis=1).flatten()
+    
+    # The top-left point will have the smallest sum
+    top_left = pts[np.argmin(s)]
+    
+    # The bottom-right point will have the largest sum
+    bottom_right = pts[np.argmax(s)]
+    
+    # The top-right point will have the smallest difference
+    top_right = pts[np.argmin(diff)]
+    
+    # The bottom-left point will have the largest difference
+    bottom_left = pts[np.argmax(diff)]
+    
+    return [top_right, bottom_right, top_left, bottom_left]
 
 
 def main():
-    image = cv2.imread("InputImages/Flowerfoot.jpeg")
-    image = imutils.resize(image, height=700)
+    image = cv2.imread("InputImages/Rabid Gnaw.jpeg")
+    image = imutils.resize(image, height=1200)
     gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
     blurred_gray = cv2.bilateralFilter(gray, 11, 17, 17)
     edges = cv2.Canny(blurred_gray, 30, 100)
 
     card_corners = getQuad(edges, image)
-    warped_card = np.zeros((400, 300, 3), dtype=np.uint8)
+    warped_card = np.zeros((980, 700, 3), dtype=np.uint8)
     
     if len(card_corners) == 4:
         ordered_corners = orderPoints(card_corners)
